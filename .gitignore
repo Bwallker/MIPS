@@ -1,0 +1,7 @@
+.idea
+CMakeLists.txt
+expanded.c
+main.asm
+build-toolchain
+c-mips-compiler
+cmake-build-debug

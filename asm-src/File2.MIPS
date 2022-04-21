@@ -1,0 +1,55 @@
+# Here is what I did to save on the amount of registers we use:
+# Load data on the fly when we need it -> don't need to use a2 and a3
+# s0 was completly redundant so got rid of it.
+# By doing our calculation in the order (f + g) - h - j instead of in the order (f + g) - (h + j) we don't need to allocate registers to store (h + j) and (f + g)
+# By using v0 intelligently I was able to remove all stack allocations in leaf_example :)
+
+.data
+result: .asciiz "(f + g) - (h + j) = "
+f:	.word 7
+g: 	.word 3
+h:	.word 10
+j:	.word 17
+
+.text
+main:
+	# This program calculates (f + g) - (h + j)
+
+	jal leaf_example
+	
+	# Let's print out our result just for fun :).
+	
+	# Save result in a1
+	move $a1, $v0
+	# Print result string
+	li $v0, 4
+	la $a0, result
+	syscall
+	
+	# Print result int
+	move $a0, $a1
+	li $v0, 1
+	syscall
+	
+	# Exit
+	li $v0, 10
+	syscall
+# This subroutine calculates the result of (F + G) - (H + J) and saves it in v0
+leaf_example:
+	# Load F and G into registers
+	lw $a0, f
+	lw $a1, g
+	
+	# F + G
+	add $v0, $a0, $a1
+	# Load H into register
+	lw $a0, h
+	# Minus H
+	sub $v0, $v0, $a0
+	
+	# Load J into register
+	lw $a0, j
+	# Minus J
+	sub $v0, $v0, $a0
+
+	jr $ra

@@ -1,0 +1,157 @@
+.eqv WORD_SIZE 4
+.data
+	input_text: .asciiz "Input a negative or positive integer: "
+	parse_error: .asciiz "There was an error parsing your input into an int"
+	.eqv SIZE_OF_BUFFER 20
+	buffer: .space SIZE_OF_BUFFER
+.text
+
+.macro safe_call(%func)
+	subi $sp, $sp WORD_SIZE
+	sw $ra, ($sp)
+	jal %func
+	lw $ra, ($sp)
+	addi $sp, $sp WORD_SIZE
+.end_macro
+
+main:
+	la $a0 input_text
+	jal get_input
+	
+	move $a0, $v0
+	li $v0, 1
+	syscall
+	
+	li $v0, 10
+	syscall
+
+# Routine for getting the vakue of one of our variables, parsing it and handling errors before returning. Takes the string to print as an input in $a0
+get_input:
+	li $v0, 4 # Print the message that was passed in.
+    	syscall
+
+    	li $v0, 8       # Read input
+	
+    	la $a0, buffer  # Use our buffer as the buffer for the input
+    	li $a1, SIZE_OF_BUFFER      # Tell the runtime how big our buffer is
+    	syscall
+
+	safe_call (parse_int)
+
+    	beq $v1, 1, handle_error # Branch on error
+
+    	jr $ra
+	
+# Routine for handling int parse errors
+handle_error:
+	la $a0, parse_error
+	li $v0, 4
+	syscall # Print error message
+	li $v0, 17
+	li $a0, 1
+	syscall #Exit with error code 1
+    	
+# This routine takes the string in our buffer and tries to parse it into an int. The result is returned in v0. If an error occured v1 will be 1, otherwise v1 is 0
+# This function will jump back to the value in ra when it finishes
+parse_int:
+	# Setup our loop.
+	# t0 will be our loop ptr and we exit when it equals t2, which is OOB
+	
+	la $a0, buffer
+	li $a1, SIZE_OF_BUFFER
+	# Trim whitespace from start of string
+	safe_call (trim_start)
+	move $t0, $v0
+	li $v0, 0
+	add $t2, $t0, $v1
+	# Return error if trimmed string is empty
+	beq $v1, 0, parse_int_error
+	
+	# Check if string starts with a minus
+	lbu $t1, ($t0)
+	# Set t9 as our check for if number is negative
+	seq $t9, $t1, 0x2D
+	# Jump into loop if positive
+	bne $t1, 0x2D, parse_int_loop
+	addi $t0, $t0, 1
+parse_int_loop:
+	# Break if we have gone out of bounds
+	bge $t0, $t2, parse_int_return
+	# Load character at index into t1
+	lbu $t1, ($t0)
+	# Exit if end line char as the docs dictate
+	beq $t1, 0xa, parse_int_return
+	# ascii offset
+	subi $t1, $t1, 0x30
+	# Jump to error if digit is invalid
+	bge $t1, 10, parse_int_error
+	blt $t1, 0, parse_int_error
+	# Move result one digit left
+	mulu $v0, $v0, 10
+	# Add digit to result
+	add $v0, $v0, $t1
+	# Increment $t0 and loop
+	addi $t0, $t0, 1
+	j parse_int_loop
+parse_int_error:
+	li $v1 1
+	jr $ra
+parse_int_return:
+	beqz $t9, parse_int_not_negative_return
+	mul $v0, $v0, -1
+parse_int_not_negative_return:
+	li $v1 0
+	jr $ra
+	
+	
+	
+# This subroutine returns a string slice with all the starting whitespace removed.
+# Whitespace in this case is defined as tab characters, space characters, newlines and carrage returns.
+# The string to trim should be passed in a0, and the size should be in a1
+# Returns the trimmed string slice in v0 and its length in v1
+trim_start:
+	# Setup our loop.
+	move $a2, $a0
+	add $a1, $a2, $a1
+trim_start_loop:
+	bge $a2, $a1, trim_start_end
+	lbu $a0, ($a2)
+	# Loop if char is whitespace
+	safe_call (is_white_space)
+	beq $v0, 1, trim_start_continue
+	# Else return
+	j trim_start_end
+
+trim_start_continue:
+	addi $a2, $a2, 1
+	j trim_start_loop
+
+trim_start_end:
+	move $v0, $a2
+	sub $v1, $a1, $a2
+	jr $ra
+
+
+
+
+
+
+
+
+# Takes a char as an input in a0 and returns 1 in v0 if its whitespace, 0 otherwise
+is_white_space: 
+	# Yes if char equals newline
+	beq $a0, 0xa, is_white_space_yes
+	# Yes if char equals tab
+	beq $a0, 0x9, is_white_space_yes
+	# Yes if char equals carage return
+	beq, $a0, 0xd, is_white_space_yes
+	# Yes if char equals space
+	beq, $a0, 0x20, is_white_space_yes
+	# Default case is no
+is_white_space_no:
+	li $v0, 0
+	jr $ra
+is_white_space_yes:
+	li $v0, 1
+	jr $ra

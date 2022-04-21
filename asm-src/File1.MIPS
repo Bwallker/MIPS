@@ -1,0 +1,13 @@
+.globl main
+
+.text
+
+main:
+	li $t2, 25
+	lw $t3, value
+	add $t4, $t2, $t3
+	sub $t5, $t2, $t3
+	
+.data
+
+value:	.word 12
